@@ -1,16 +1,25 @@
 
 
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from pydantic import BaseModel
 from datetime import datetime
 import json
 from .db import conn
+from .utils import upload_to_web3_storage, recompute_score, call_asi_chat
+from .embeddings import create_embeddings_and_store, retrieve_relevant_texts
+
+router = APIRouter()
+
+class ChatRequest(BaseModel):
+    user_id: str | None
+    message: str
 
 
 @router.post("/create_inft")
 async def create_inft(name: str = Form(...), owner: str = Form(...), tag: str = Form(...),
                       file: UploadFile = File(...), traits: str = Form("{}")):
     content = await file.read()
-    cid = "sfsf"
-    #get_from_smart_contract
+    cid = upload_to_web3_storage(content, file.filename)
 
     cur = conn.cursor()
     cur.execute("INSERT INTO infts (name, owner, tag, cid, traits_json, created_at) VALUES (?,?,?,?,?,?)",
@@ -31,6 +40,8 @@ async def create_inft(name: str = Form(...), owner: str = Form(...), tag: str = 
         except:
             text_chunks = []
 
+    if text_chunks:
+        create_embeddings_and_store(inft_id, text_chunks)
 
     return {"inft_id": inft_id, "cid": cid}
 
@@ -45,3 +56,22 @@ def list_infts():
          "traits": json.loads(r[5]) if r[5] else [], "score": r[6], "created_at": r[7]}
         for r in rows
     ]
+
+
+@router.post("/chat/{inft_id}")
+async def chat_with_inft(inft_id: int, req: ChatRequest):
+    cur = conn.cursor()
+    cur.execute("SELECT name, owner, tag, traits_json FROM infts WHERE id=?", (inft_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="iNFT not found")
+    name, owner, tag, traits_json = row
+    traits = json.loads(traits_json) if traits_json else []
+
+    retrieved = retrieve_relevant_texts(inft_id, req.message, k=3)
+    persona = f"Persona: name={name}, tag={tag}, traits={traits}"
+    if retrieved:
+        persona += "\nRelevant memory:\n" + "\n---\n".join(retrieved)
+
+    reply = call_asi_chat(system_prompt=persona, user_message=req.message)
+    return {"reply": reply}
