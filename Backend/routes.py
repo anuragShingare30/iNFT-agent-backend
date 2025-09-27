@@ -1,5 +1,5 @@
 # backend/routes.py
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Body
 from pydantic import BaseModel
 from datetime import datetime
 import json
@@ -13,30 +13,61 @@ class ChatRequest(BaseModel):
     user_id: str | None
     message: str
 
-@router.post("/create_inft")
-async def create_inft(name: str = Form(...), owner: str = Form(...), tag: str = Form(...),
-                      file: UploadFile = File(...), traits: str = Form("{}")):
-    content = await file.read()
-    cid = upload_to_web3_storage(content, file.filename)
+# @router.post("/create_inft")
+# async def create_inft(name: str = Form(...), owner: str = Form(...), tag: str = Form(...),
+#                       file: UploadFile = File(...), traits: str = Form("{}")):
+#     content = await file.read()
+#     cid = upload_to_web3_storage(content, file.filename)
 
+#     cur = conn.cursor()
+#     cur.execute("INSERT INTO infts (name, owner, tag, cid, traits_json, created_at) VALUES (?,?,?,?,?,?)",
+#                 (name, owner, tag, cid, traits, datetime.utcnow().isoformat()))
+#     inft_id = cur.lastrowid
+#     conn.commit()
+
+#     text_chunks = []
+#     try:
+#         text = content.decode("utf-8")
+#         for part in text.split("\n\n"):
+#             if len(part.strip()) > 20:
+#                 text_chunks.append(part.strip())
+#     except:
+#         try:
+#             trait_text = json.loads(traits)
+#             text_chunks = trait_text if isinstance(trait_text, list) else [str(trait_text)]
+#         except:
+#             text_chunks = []
+
+#     if text_chunks:
+#         create_embeddings_and_store(inft_id, text_chunks)
+
+#     return {"inft_id": inft_id, "cid": cid}
+@router.post("/create_inft")
+async def create_inft(
+    name: str = Body(...),
+    owner: str = Body(...),
+    tag: str = Body(...),
+    cid: str = Body(...),
+    traits: str = Body("{}")
+):
     cur = conn.cursor()
-    cur.execute("INSERT INTO infts (name, owner, tag, cid, traits_json, created_at) VALUES (?,?,?,?,?,?)",
-                (name, owner, tag, cid, traits, datetime.utcnow().isoformat()))
+    cur.execute(
+        "INSERT INTO infts (name, owner, tag, cid, traits_json, created_at) VALUES (?,?,?,?,?,?)",
+        (name, owner, tag, cid, traits, datetime.utcnow().isoformat())
+    )
     inft_id = cur.lastrowid
     conn.commit()
 
+    # Try to extract text chunks for embeddings
     text_chunks = []
     try:
-        text = content.decode("utf-8")
-        for part in text.split("\n\n"):
-            if len(part.strip()) > 20:
-                text_chunks.append(part.strip())
+        trait_text = json.loads(traits)
+        if isinstance(trait_text, list):
+            text_chunks = [json.dumps(t) for t in trait_text]
+        else:
+            text_chunks = [str(trait_text)]
     except:
-        try:
-            trait_text = json.loads(traits)
-            text_chunks = trait_text if isinstance(trait_text, list) else [str(trait_text)]
-        except:
-            text_chunks = []
+        text_chunks = []
 
     if text_chunks:
         create_embeddings_and_store(inft_id, text_chunks)
