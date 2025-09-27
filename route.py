@@ -1,5 +1,4 @@
-
-
+# backend/routes.py
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
@@ -13,7 +12,6 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     user_id: str | None
     message: str
-
 
 @router.post("/create_inft")
 async def create_inft(name: str = Form(...), owner: str = Form(...), tag: str = Form(...),
@@ -45,7 +43,6 @@ async def create_inft(name: str = Form(...), owner: str = Form(...), tag: str = 
 
     return {"inft_id": inft_id, "cid": cid}
 
-
 @router.get("/list_infts")
 def list_infts():
     cur = conn.cursor()
@@ -56,7 +53,6 @@ def list_infts():
          "traits": json.loads(r[5]) if r[5] else [], "score": r[6], "created_at": r[7]}
         for r in rows
     ]
-
 
 @router.post("/chat/{inft_id}")
 async def chat_with_inft(inft_id: int, req: ChatRequest):
@@ -75,3 +71,14 @@ async def chat_with_inft(inft_id: int, req: ChatRequest):
 
     reply = call_asi_chat(system_prompt=persona, user_message=req.message)
     return {"reply": reply}
+
+@router.post("/feedback/{inft_id}")
+async def submit_feedback(inft_id: int, rating: float = Form(...), comment: str = Form("")):
+    if rating < 0 or rating > 10:
+        raise HTTPException(status_code=400, detail="rating must be 0..10")
+    cur = conn.cursor()
+    cur.execute("INSERT INTO feedbacks (inft_id, rating, comment, created_at) VALUES (?,?,?,?)",
+                (inft_id, rating, comment, datetime.utcnow().isoformat()))
+    conn.commit()
+    new_score = recompute_score(inft_id)
+    return {"new_score": new_score}

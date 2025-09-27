@@ -17,4 +17,14 @@ CREATE TABLE IF NOT EXISTS infts (
 )
 """)
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS feedbacks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inft_id INTEGER,
+    rating REAL,
+    comment TEXT,
+    created_at TEXT
+)
+""")
+
 conn.commit()

@@ -1,4 +1,5 @@
-import time, requests
+# backend/utils.py
+import time, json, requests
 from fastapi import HTTPException
 from .config import ASI_API_KEY, ASI_MODEL, BASE_URL_ASI
 from .db import conn
@@ -6,6 +7,17 @@ from .db import conn
 def upload_to_web3_storage(file_bytes: bytes, filename: str) -> str:
     ts = int(time.time())
     return f"mockCID-{filename}-{ts}"
+
+def recompute_score(inft_id: int):
+    cur = conn.cursor()
+    cur.execute("SELECT AVG(rating) FROM feedbacks WHERE inft_id=?", (inft_id,))
+    res = cur.fetchone()[0]
+    if res is None:
+        return 0.0
+    score = max(0, min(10, float(res)))
+    cur.execute("UPDATE infts SET score=? WHERE id=?", (score, inft_id))
+    conn.commit()
+    return score
 
 def call_asi_chat(system_prompt: str, user_message: str, history: list = None) -> str:
     if not ASI_API_KEY:
