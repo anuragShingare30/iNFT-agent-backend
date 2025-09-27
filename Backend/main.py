@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import router
+from Backend.routes import router
 
 app = FastAPI(title="iNFT Agent Backend")
 
